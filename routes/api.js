@@ -60,10 +60,10 @@ async function getStockLikes(stockSymbol, addLike, anonIp) {
     stockDoc = await StockModel.findOne({ stock: stockSymbol });
   }
 
-  return stockDoc ? stockDoc.likes : 0;
+  return stockDoc ? (stockDoc.likes || 0) : 0;
 }
 
-module.exports = function (app) {
+const apiRoutes = function (app) {
 
   app.route('/api/stock-prices')
     .get(async function (req, res) {
@@ -99,8 +99,11 @@ module.exports = function (app) {
           getStockPrice(stockSymbol2)
         ]);
 
-        if (!price1 || !price2) {
-          return res.json({ error: "Uno de los stocks no es válido" });
+        if (!price1) {
+          return res.json({ error: `Stock no válido: ${stockSymbol1}` });
+        }
+        if (!price2) {
+          return res.json({ error: `Stock no válido: ${stockSymbol2}` });
         }
 
         const [likes1, likes2] = await Promise.all([
@@ -121,4 +124,9 @@ module.exports = function (app) {
       
       return res.json({ error: "Petición no válida" });
     });
+};
+
+module.exports = {
+  apiRoutes: apiRoutes, 
+  StockModel: StockModel 
 };

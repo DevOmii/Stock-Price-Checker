@@ -5,7 +5,7 @@ const expect = require('chai').expect;
 const cors = require('cors');
 const helmet = require('helmet'); 
 
-const apiRoutes = require('./routes/api.js');
+const api = require('./routes/api.js'); 
 const fccTestingRoutes = require('./routes/fcc-testing.js');
 const runner = require('./test-runner');
 
@@ -20,9 +20,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(helmet.contentSecurityPolicy({
   directives: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'"],
-    styleSrc: ["'self'"],
+    defaultSrc: ["'self'"], 
+    scriptSrc: ["'self'"],  
+    styleSrc: ["'self'"],   
   }
 }));
 
@@ -39,7 +39,7 @@ app.route('/')
 
 fccTestingRoutes(app);
 
-apiRoutes(app);
+api.apiRoutes(app); 
 
 app.use(function(req, res, next) {
   res.status(404)
