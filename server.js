@@ -13,7 +13,6 @@ const app = express();
 
 app.use('/public', express.static(process.cwd() + '/public'));
 
-// *** LÍNEA CRÍTICA AGREGADA ***
 // Esto hace que Express confíe en los proxies de Render y lea el encabezado X-Forwarded-For
 app.set('trust proxy', 1);
 
