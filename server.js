@@ -1,13 +1,13 @@
 'use strict';
 require('dotenv').config();
-const express     = require('express');
-const bodyParser  = require('body-parser');
-const cors        = require('cors');
-
-const apiRoutes         = require('./routes/api.js');
-const fccTestingRoutes  = require('./routes/fcctesting.js');
-const runner            = require('./test-runner');
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 const helmet = require('helmet');
+
+const apiRoutes = require('./routes/api.js');
+const fccTestingRoutes = require('./routes/fcctesting.js');
+const runner = require('./test-runner');
 
 const app = express();
 
@@ -17,10 +17,24 @@ app.use(cors({origin: '*'}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(helmet.frameguard({ action: 'deny' }));
-app.use(helmet.xssFilter());
-app.use(helmet.noSniff());
-app.use(helmet.hsts({ maxAge: 7776000 }));
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://code.jquery.com', 'https://cdn.jsdelivr.net'],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+      },
+    },
+    xssFilter: true,
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    hsts: { maxAge: 7776000 },
+    xPoweredBy: false,
+  })
+);
+
 app.disable('x-powered-by');
 
 app.route('/')
@@ -30,7 +44,7 @@ app.route('/')
 
 fccTestingRoutes(app);
 
-apiRoutes(app);  
+apiRoutes(app); 
     
 app.use(function(req, res, next) {
   res.status(404)
