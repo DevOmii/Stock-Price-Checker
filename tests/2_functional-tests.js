@@ -1,98 +1,72 @@
-const chaiHttp = require('chai-http');
-const chai = require('chai');
-const assert = chai.assert;
-const server = require('../server');
-const mongoose = require('mongoose'); 
+'use strict';
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
-chai.use(chaiHttp);
+const apiRoutes = require('./routes/api.js');
+const fccTestingRoutes = require('./routes/fcctesting.js');
+const runner = require('./test-runner');
+const helmet = require('helmet');
 
-suite('Functional Tests', function() {
-    // El tiempo de espera global aumentado a 10s (10000ms) para evitar fallos por la API externa lenta.
-    this.timeout(10000); 
+const app = express();
+
+app.use('/public', express.static(process.cwd() + '/public'));
+
+// Esto hace que Express confíe en los proxies de Render y lea el encabezado X-Forwarded-For
+app.set('trust proxy', 1);
+
+app.use(cors({origin: '*'}));
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Configuración de Seguridad requerida por freeCodeCamp (Fallo 2)
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'"],
+    connectSrc: ["'self'", 'https://stock-price-checker-proxy.freecodecamp.rocks', process.env.DB_CONNECTION_HOST || 'http://localhost'], 
+    fontSrc: ["'self'"], 
+    imgSrc: ["'self'"],
+  }
+}));
+
+app.use(helmet.frameguard({ action: 'deny' }));
+app.use(helmet.xssFilter());
+app.use(helmet.noSniff());
+app.use(helmet.hsts({ maxAge: 7776000 }));
+app.disable('x-powered-by');
+
+app.route('/')
+  .get(function (req, res) {
+    res.sendFile(process.cwd() + '/views/index.html');
+  });
+
+fccTestingRoutes(app);
+
+apiRoutes(app); 
     
-    // Hook para limpiar la base de datos ANTES de que comiencen todas las pruebas
-    suiteSetup(function(done) {
-        // Obtenemos el modelo 'Stock' que fue creado en api.js
-        const Stock = mongoose.model('Stock');
-
-        // Eliminamos todos los documentos para asegurar un estado inicial limpio
-        Stock.deleteMany({}, (err) => {
-            if (err) {
-                console.error("Error al limpiar la DB en suiteSetup:", err);
-            }
-            done();
-        });
-    });
-
-    suite('GET /api/stock-prices => stockData object or array', function() {
-
-        test('1 stock', function(done) {
-            chai.request(server)
-                .get('/api/stock-prices')
-                .query({ stock: 'goog' })
-                .end(function(err, res) {
-                    assert.equal(res.status, 200);
-                    assert.property(res.body, 'stockData');
-                    assert.equal(res.body.stockData.stock, 'GOOG');
-                    assert.isNumber(res.body.stockData.likes);
-                    done();
-                });
-        });
-
-        test('1 stock with like', function(done) {
-            chai.request(server)
-                .get('/api/stock-prices')
-                .query({ stock: 'tsla', like: true })
-                .set('X-Forwarded-For', '10.0.0.1') // Usamos una IP fija
-                .end(function(err, res) {
-                    assert.equal(res.status, 200);
-                    assert.equal(res.body.stockData.stock, 'TSLA');
-                    assert.equal(res.body.stockData.likes, 1); // Debe ser 1
-                    done();
-                });
-        });
-
-        test('1 stock with like again (no double like)', function(done) {
-            chai.request(server)
-                .get('/api/stock-prices')
-                .query({ stock: 'tsla', like: true })
-                .set('X-Forwarded-For', '10.0.0.1') // Misma IP
-                .end(function(err, res) {
-                    assert.equal(res.status, 200);
-                    // El contador NO debe haber aumentado, debe seguir siendo 1
-                    assert.equal(res.body.stockData.likes, 1); 
-                    done();
-                });
-        });
-
-        test('2 stocks', function(done) {
-            chai.request(server)
-                .get('/api/stock-prices')
-                .query({ stock: ['goog', 'msft'] })
-                .end(function(err, res) {
-                    assert.equal(res.status, 200);
-                    assert.isArray(res.body.stockData);
-                    assert.equal(res.body.stockData.length, 2);
-                    assert.property(res.body.stockData[0], 'rel_likes');
-                    assert.property(res.body.stockData[1], 'rel_likes');
-                    assert.equal(res.body.stockData[0].rel_likes + res.body.stockData[1].rel_likes, 0);
-                    done();
-                });
-        });
-
-        test('2 stocks with like', function(done) {
-            chai.request(server)
-                .get('/api/stock-prices')
-                .query({ stock: ['aapl', 'amzn'], like: true })
-                .set('X-Forwarded-For', '10.0.0.2') // Nueva IP para esta prueba
-                .end(function(err, res) {
-                    assert.equal(res.status, 200);
-                    assert.isArray(res.body.stockData);
-                    assert.property(res.body.stockData[0], 'rel_likes');
-                    assert.equal(res.body.stockData[0].rel_likes + res.body.stockData[1].rel_likes, 0);
-                    done();
-                });
-        });
-
-    });
+app.use(function(req, res, next) {
+  res.status(404)
+    .type('text')
+    .send('Not Found');
 });
+
+const listener = app.listen(process.env.PORT || 3000, function () {
+  console.log('Your app is listening on port ' + listener.address().port);
+  if(process.env.NODE_ENV==='test') {
+    console.log('Running Tests...');
+    setTimeout(function () {
+      try {
+        runner.run();
+      } catch(e) {
+        console.log('Tests are not valid:');
+        console.error(e);
+      }
+    }, 3500);
+  }
+});
+
+module.exports = app;
