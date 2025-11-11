@@ -5,8 +5,8 @@ const fetch = require('node-fetch');
 const crypto = require('crypto');
 
 // Conexión a Mongoose
-// La conexión ahora maneja promesas, imprimiendo el estado de la conexión.
-mongoose.connect(process.env.DB)
+const dbUrl = process.env.DB; 
+mongoose.connect(dbUrl)
   .then(() => {
     console.log('MongoDB Conectado.');
   })
@@ -18,18 +18,17 @@ mongoose.connect(process.env.DB)
 const stockSchema = new mongoose.Schema({
   stock: { type: String, required: true },
   likes: { type: Number, default: 0 },
-  ips: [String]
+  ips: [String] // Almacena los hashes de IP para prevenir doble like
 });
 
 const StockModel = mongoose.model('Stock', stockSchema);
 
 /**
  * Obtiene el precio más reciente de la acción desde el proxy de freeCodeCamp.
- * @param {string} stockSymbol - Símbolo de la acción (e.g., 'GOOG').
- * @returns {Promise<number|null>} El precio de la acción o null si no se encuentra.
  */
 async function getStockPrice(stockSymbol) {
   try {
+    // Usamos el proxy oficial para obtener datos de acciones
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stockSymbol}/quote`;
     const response = await fetch(url);
     const responseText = await response.text();
@@ -42,50 +41,46 @@ async function getStockPrice(stockSymbol) {
     return data.latestPrice;
 
   } catch (error) {
-    // Manejo de errores de fetch
+    console.error('Error al obtener el precio de la acción:', error);
     return null;
   }
 }
 
 /**
- * Gestiona los likes de una acción, asegurando que solo se cuenta 1 like por IP anónima.
- * @param {string} stockSymbol - Símbolo de la acción.
- * @param {boolean} addLike - Indica si se debe intentar añadir un like.
- * @param {string} anonIp - IP anónima (hash SHA256) del usuario.
- * @returns {Promise<number>} El número total de likes de la acción.
+ * Gestiona los likes de una acción, asegurando que solo se permita 1 like por IP.
  */
 async function getStockLikes(stockSymbol, addLike, anonIp) {
-  // Espera a que la conexión esté abierta para evitar errores de timeout
-  if (mongoose.connection.readyState === 0) {
-    console.warn('Mongoose not connected, waiting for connection...');
-    await new Promise(resolve => mongoose.connection.on('connected', resolve));
+  // Verificamos si la conexión está lista. Si no, esperamos brevemente (esto es para el entorno de prueba)
+  if (mongoose.connection.readyState !== 1) {
+     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  
+
   let stockDoc;
+  const upperStock = stockSymbol.toUpperCase();
 
   if (addLike) {
-    stockDoc = await StockModel.findOne({ stock: stockSymbol });
+    stockDoc = await StockModel.findOne({ stock: upperStock });
 
     if (!stockDoc) {
-      // Si la acción no existe, la crea con 1 like
+      // Si la acción no existe, la creamos y añadimos el like
       stockDoc = new StockModel({
-        stock: stockSymbol,
+        stock: upperStock,
         likes: 1,
         ips: [anonIp]
       });
       await stockDoc.save();
     }
     else if (!stockDoc.ips.includes(anonIp)) {
-      // Si la acción existe y la IP no ha dado like, incrementa el like
+      // Si la acción existe y la IP es nueva, aumentamos el like
       stockDoc.likes++;
       stockDoc.ips.push(anonIp);
       await stockDoc.save();
     }
-    // Si la acción existe y la IP ya dio like, no hace nada (no doble like)
+    // Si ya existe y la IP ya votó, no hacemos nada (no double like)
     
   } else {
-    // Si solo se consulta, busca el documento
-    stockDoc = await StockModel.findOne({ stock: stockSymbol });
+    // Si no se pide like, solo obtenemos el documento
+    stockDoc = await StockModel.findOne({ stock: upperStock });
   }
 
   return stockDoc ? stockDoc.likes : 0;
@@ -96,8 +91,9 @@ module.exports = function (app) {
   app.route('/api/stock-prices')
     .get(async function (req, res) {
       const { stock, like } = req.query;
-      const addLike = like === 'true';
-      // Hash de la IP para anonimizarla, usado para el conteo de likes
+      // Convertimos el string 'true' a booleano
+      const addLike = like === 'true'; 
+      // Hasheamos la IP para anonimizarla
       const anonIp = crypto.createHash('sha256').update(req.ip).digest('hex');
 
       // CASO 1: Una sola acción
@@ -125,21 +121,19 @@ module.exports = function (app) {
         const stockSymbol1 = stock[0].toUpperCase();
         const stockSymbol2 = stock[1].toUpperCase();
 
-        const [price1, price2] = await Promise.all([
+        // Obtenemos precios y likes en paralelo para mayor velocidad
+        const [price1, price2, likes1, likes2] = await Promise.all([
           getStockPrice(stockSymbol1),
-          getStockPrice(stockSymbol2)
+          getStockPrice(stockSymbol2),
+          getStockLikes(stockSymbol1, addLike, anonIp),
+          getStockLikes(stockSymbol2, addLike, anonIp)
         ]);
 
         if (!price1 || !price2) {
           return res.json({ error: "Uno de los stocks no es válido" });
         }
 
-        const [likes1, likes2] = await Promise.all([
-          getStockLikes(stockSymbol1, addLike, anonIp),
-          getStockLikes(stockSymbol2, addLike, anonIp)
-        ]);
-
-        // Cálculo de likes relativos (diferencia de likes)
+        // Calculamos los likes relativos
         const rel_likes1 = likes1 - likes2;
         const rel_likes2 = likes2 - likes1;
 
