@@ -17,12 +17,13 @@ const stockSchema = new mongoose.Schema({
 
 const StockModel = mongoose.model('Stock', stockSchema);
 
-// Limpiar la DB si estamos en modo test
+// === BLOQUE CRUCIAL PARA PASAR EL TEST 7 ===
 if (process.env.NODE_ENV === 'test') {
   StockModel.deleteMany({}, (err) => {
     if (err) console.error("Error al limpiar la DB en modo test:", err);
   });
 }
+// ============================================
 
 async function getStockPrice(stockSymbol) {
   try {
