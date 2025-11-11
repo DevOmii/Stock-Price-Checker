@@ -67,16 +67,23 @@ module.exports = function (app) {
 
   app.route('/api/stock-prices')
     .get(async function (req, res) {
-      const { stock, like } = req.query;
+      let stockSymbols = Array.isArray(req.query.stock) ? req.query.stock : [req.query.stock];
+      
+      const { like } = req.query;
       const addLike = like === 'true';
       const anonIp = crypto.createHash('sha256').update(req.ip).digest('hex');
 
-      if (typeof stock === 'string') {
-        const stockSymbol = stock.toUpperCase();
+      if (stockSymbols.length === 1) {
+        const stockSymbol = stockSymbols[0].toUpperCase();
+        
+        if (!stockSymbol) {
+          return res.json({ error: "Parámetro de stock faltante" });
+        }
+
         const price = await getStockPrice(stockSymbol);
         
-        if (!price) {
-          return res.json({ error: "Stock no válido" });
+        if (price === null) {
+          return res.json({ error: "Stock no válido", stock: stockSymbol });
         }
         
         const likes = await getStockLikes(stockSymbol, addLike, anonIp);
@@ -90,17 +97,21 @@ module.exports = function (app) {
         });
       }
 
-      if (Array.isArray(stock) && stock.length === 2) {
-        const stockSymbol1 = stock[0].toUpperCase();
-        const stockSymbol2 = stock[1].toUpperCase();
+      if (stockSymbols.length === 2) {
+        const stockSymbol1 = stockSymbols[0].toUpperCase();
+        const stockSymbol2 = stockSymbols[1].toUpperCase();
+        
+        if (stockSymbol1 === stockSymbol2) {
+             return res.json({ error: "No puedes comparar la misma acción" });
+        }
 
         const [price1, price2] = await Promise.all([
           getStockPrice(stockSymbol1),
           getStockPrice(stockSymbol2)
         ]);
 
-        if (!price1 || !price2) {
-          return res.json({ error: "Uno de los stocks no es válido" });
+        if (price1 === null || price2 === null) {
+          return res.json({ error: "Uno o ambos stocks no son válidos" });
         }
 
         const [likes1, likes2] = await Promise.all([
@@ -119,6 +130,6 @@ module.exports = function (app) {
         });
       }
       
-      return res.json({ error: "Petición no válida" });
+      return res.json({ error: "Petición no válida (debe ser 1 o 2 stocks)" });
     });
 };
