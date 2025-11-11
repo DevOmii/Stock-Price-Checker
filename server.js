@@ -13,30 +13,32 @@ const app = express();
 
 app.use('/public', express.static(process.cwd() + '/public'));
 
+// *** LÍNEA CRÍTICA AGREGADA ***
+// Esto hace que Express confíe en los proxies de Render y lea el encabezado X-Forwarded-For
+app.set('trust proxy', 1);
+
 app.use(cors({origin: '*'}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Configuración de Seguridad: CSP estricta
+// Configuración de Seguridad requerida por freeCodeCamp (Fallo 2)
 app.use(helmet.contentSecurityPolicy({
   directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'"], 
-    styleSrc: ["'self'"], 
-    // Permite la conexión al proxy de stock para la funcionalidad de la API
-    connectSrc: ["'self'", "https://stock-price-checker-proxy.freecodecamp.rocks"],
-    frameSrc: ["'self'"]
-  },
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'"],
+    connectSrc: ["'self'", 'https://stock-price-checker-proxy.freecodecamp.rocks', process.env.DB_CONNECTION_HOST || 'http://localhost'], 
+    fontSrc: ["'self'"], 
+    imgSrc: ["'self'"],
+  }
 }));
 
-// Otras configuraciones de seguridad de Helmet
-app.use(helmet.frameguard({ action: 'deny' })); // Clickjacking protection
-app.use(helmet.xssFilter()); // XSS protection
-app.use(helmet.noSniff()); // MIME type sniffing protection
-app.use(helmet.hsts({ maxAge: 7776000 })); // HSTS (HTTP Strict Transport Security)
-app.disable('x-powered-by'); // Remove X-Powered-By header
-
+app.use(helmet.frameguard({ action: 'deny' }));
+app.use(helmet.xssFilter());
+app.use(helmet.noSniff());
+app.use(helmet.hsts({ maxAge: 7776000 }));
+app.disable('x-powered-by');
 
 app.route('/')
   .get(function (req, res) {
