@@ -4,7 +4,10 @@ const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-// NOTA: La conexión a Mongoose se maneja ahora en server.js.
+mongoose.connect(process.env.DB, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
 const stockSchema = new mongoose.Schema({
   stock: { type: String, required: true },
@@ -14,24 +17,9 @@ const stockSchema = new mongoose.Schema({
 
 const StockModel = mongoose.model('Stock', stockSchema);
 
-// Bloque crucial para limpiar la DB y asegurar que el test de doble like pase.
-if (process.env.NODE_ENV === 'test') {
-  (async () => {
-    try {
-      await StockModel.deleteMany({});
-    } catch (err) {
-      console.error("Error al limpiar la DB en modo test:", err);
-    }
-  })();
-}
-
 async function getStockPrice(stockSymbol) {
   try {
-    // --- CAMBIO CLAVE AQUÍ ---
-    // URL correcta del proxy de freeCodeCamp
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stockSymbol}/quote`;
-    // -------------------------
-    
     const response = await fetch(url);
     const responseText = await response.text();
 
@@ -43,7 +31,6 @@ async function getStockPrice(stockSymbol) {
     return data.latestPrice;
 
   } catch (error) {
-    console.error('[getStockPrice] Error en el bloque catch:', error);
     return null;
   }
 }
@@ -61,7 +48,7 @@ async function getStockLikes(stockSymbol, addLike, anonIp) {
         ips: [anonIp]
       });
       await stockDoc.save();
-    } 
+    }
     else if (!stockDoc.ips.includes(anonIp)) {
       stockDoc.likes++;
       stockDoc.ips.push(anonIp);
@@ -79,23 +66,16 @@ module.exports = function (app) {
 
   app.route('/api/stock-prices')
     .get(async function (req, res) {
-      let stockSymbols = Array.isArray(req.query.stock) ? req.query.stock : [req.query.stock];
-      
-      const { like } = req.query;
+      const { stock, like } = req.query;
       const addLike = like === 'true';
       const anonIp = crypto.createHash('sha256').update(req.ip).digest('hex');
 
-      if (stockSymbols.length === 1) {
-        const stockSymbol = stockSymbols[0].toUpperCase();
-        
-        if (!stockSymbol) {
-          return res.json({ error: "Parámetro de stock faltante" });
-        }
-
+      if (typeof stock === 'string') {
+        const stockSymbol = stock.toUpperCase();
         const price = await getStockPrice(stockSymbol);
         
-        if (price === null) {
-          return res.json({ error: "Stock no válido", stock: stockSymbol });
+        if (!price) {
+          return res.json({ error: "Stock no válido" });
         }
         
         const likes = await getStockLikes(stockSymbol, addLike, anonIp);
@@ -109,21 +89,17 @@ module.exports = function (app) {
         });
       }
 
-      if (stockSymbols.length === 2) {
-        const stockSymbol1 = stockSymbols[0].toUpperCase();
-        const stockSymbol2 = stockSymbols[1].toUpperCase();
-        
-        if (stockSymbol1 === stockSymbol2) {
-             return res.json({ error: "No puedes comparar la misma acción" });
-        }
+      if (Array.isArray(stock) && stock.length === 2) {
+        const stockSymbol1 = stock[0].toUpperCase();
+        const stockSymbol2 = stock[1].toUpperCase();
 
         const [price1, price2] = await Promise.all([
           getStockPrice(stockSymbol1),
           getStockPrice(stockSymbol2)
         ]);
 
-        if (price1 === null || price2 === null) {
-          return res.json({ error: "Uno o ambos stocks no son válidos" });
+        if (!price1 || !price2) {
+          return res.json({ error: "Uno de los stocks no es válido" });
         }
 
         const [likes1, likes2] = await Promise.all([
@@ -142,6 +118,6 @@ module.exports = function (app) {
         });
       }
       
-      return res.json({ error: "Petición no válida (debe ser 1 o 2 stocks)" });
+      return res.json({ error: "Petición no válida" });
     });
 };
