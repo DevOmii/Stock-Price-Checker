@@ -17,11 +17,23 @@ app.use(cors({origin: '*'}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// INICIO DE LA CORRECCIÓN CSP
 app.use(helmet.frameguard({ action: 'deny' }));
 app.use(helmet.xssFilter());
 app.use(helmet.noSniff());
 app.use(helmet.hsts({ maxAge: 7776000 }));
 app.disable('x-powered-by');
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"], 
+    styleSrc: ["'self'"],
+    // Necesitas permitir las llamadas al proxy de stock para que la funcionalidad trabaje
+    connectSrc: ["'self'", "https://stock-price-checker-proxy.freecodecamp.rocks"],
+  },
+}));
+// FIN DE LA CORRECCIÓN CSP
 
 app.route('/')
   .get(function (req, res) {
