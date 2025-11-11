@@ -18,22 +18,25 @@ app.use(cors({origin: '*'}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// INICIO DE LA CORRECCIÓN CSP
-app.use(helmet.frameguard({ action: 'deny' }));
-app.use(helmet.xssFilter());
-app.use(helmet.noSniff());
-app.use(helmet.hsts({ maxAge: 7776000 }));
-app.disable('x-powered-by');
+// Configuración de Seguridad: CSP estricta
 app.use(helmet.contentSecurityPolicy({
   directives: {
     defaultSrc: ["'self'"],
     scriptSrc: ["'self'"], 
-    styleSrc: ["'self'"],
-    // Necesitas permitir las llamadas al proxy de stock para que la funcionalidad trabaje
+    styleSrc: ["'self'"], 
+    // Permite la conexión al proxy de stock para la funcionalidad de la API
     connectSrc: ["'self'", "https://stock-price-checker-proxy.freecodecamp.rocks"],
+    frameSrc: ["'self'"]
   },
 }));
-// FIN DE LA CORRECCIÓN CSP
+
+// Otras configuraciones de seguridad de Helmet
+app.use(helmet.frameguard({ action: 'deny' })); // Clickjacking protection
+app.use(helmet.xssFilter()); // XSS protection
+app.use(helmet.noSniff()); // MIME type sniffing protection
+app.use(helmet.hsts({ maxAge: 7776000 })); // HSTS (HTTP Strict Transport Security)
+app.disable('x-powered-by'); // Remove X-Powered-By header
+
 
 app.route('/')
   .get(function (req, res) {
