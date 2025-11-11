@@ -16,14 +16,22 @@ const StockModel = mongoose.model('Stock', stockSchema);
 
 // Bloque crucial para limpiar la DB y asegurar que el test de doble like pase.
 if (process.env.NODE_ENV === 'test') {
-  StockModel.deleteMany({}, (err) => {
-    if (err) console.error("Error al limpiar la DB en modo test:", err);
-  });
+  (async () => {
+    try {
+      await StockModel.deleteMany({});
+    } catch (err) {
+      console.error("Error al limpiar la DB en modo test:", err);
+    }
+  })();
 }
 
 async function getStockPrice(stockSymbol) {
   try {
+    // --- CAMBIO CLAVE AQUÍ ---
+    // URL correcta del proxy de freeCodeCamp
     const url = `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${stockSymbol}/quote`;
+    // -------------------------
+    
     const response = await fetch(url);
     const responseText = await response.text();
 
