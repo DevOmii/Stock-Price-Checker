@@ -2,13 +2,13 @@ const chaiHttp = require('chai-http');
 const chai = require('chai');
 const assert = chai.assert;
 const server = require('../server');
-// Importar mongoose es CRUCIAL para acceder al modelo y limpiar la DB
 const mongoose = require('mongoose'); 
 
 chai.use(chaiHttp);
 
 suite('Functional Tests', function() {
-    this.timeout(5000);
+    // El tiempo de espera global aumentado a 10s (10000ms) para evitar fallos por la API externa lenta.
+    this.timeout(10000); 
     
     // Hook para limpiar la base de datos ANTES de que comiencen todas las pruebas
     suiteSetup(function(done) {
