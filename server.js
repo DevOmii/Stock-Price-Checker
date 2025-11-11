@@ -7,8 +7,8 @@ const helmet = require('helmet');
 const mongoose = require('mongoose');
 
 const apiRoutes = require('./routes/api.js');
-const fccTestingRoutes = require.require('./routes/fcctesting.js');
-const runner = require.require('./test-runner');
+const fccTestingRoutes = require('./routes/fcctesting.js');
+const runner = require('./test-runner');
 
 const app = express();
 
