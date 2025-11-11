@@ -4,10 +4,7 @@ const mongoose = require('mongoose');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-mongoose.connect(process.env.DB, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+// NOTA: La conexión a Mongoose se maneja ahora en server.js.
 
 const stockSchema = new mongoose.Schema({
   stock: { type: String, required: true },
@@ -17,13 +14,12 @@ const stockSchema = new mongoose.Schema({
 
 const StockModel = mongoose.model('Stock', stockSchema);
 
-// === BLOQUE CRUCIAL PARA PASAR EL TEST 7 ===
+// Bloque crucial para limpiar la DB y asegurar que el test de doble like pase.
 if (process.env.NODE_ENV === 'test') {
   StockModel.deleteMany({}, (err) => {
     if (err) console.error("Error al limpiar la DB en modo test:", err);
   });
 }
-// ============================================
 
 async function getStockPrice(stockSymbol) {
   try {
